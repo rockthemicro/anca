@@ -1,6 +1,10 @@
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 class MyRunnable implements Runnable {
     private int i;
@@ -30,27 +34,41 @@ class MyRunnable implements Runnable {
         synchronized(this.results) {
             this.results.add(result);
         }
+
+        try {
+            Main.barrier.await();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (BrokenBarrierException e) {
+            e.printStackTrace();
+        }
     }
 }
 
 public class Main {
+    private static ExecutorService executor = Executors.newFixedThreadPool(7);
+    public static CyclicBarrier barrier = new CyclicBarrier(8); // numarul de threaduri (7) + 1
+
     private static Move calculateNextBestMove(Board board, Side side) {
         List<Integer> results = Collections.synchronizedList(new ArrayList<Integer>()); // IMPORTANT
-        List<Thread> threads = new ArrayList<Thread>();
+
         Kalah kalah = new Kalah(); // Kalah(board) din python
 
         for (int i = 1; i <= 7; i++) {
-            threads.add(new Thread(new MyRunnable(i, kalah, board, side, results)));
-            threads.get(i - 1).start(); // pornim noul thread
+            Main.executor.execute(new Thread(new MyRunnable(i, kalah, board, side, results)));
         }
 
-        for (int i = 0; i < 7; i++) {
-            try {
-                threads.get(i).join();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+        // IMPORTANT asteptam ca toate threadurile sa-si termine treaba
+        try {
+            Main.barrier.await();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (BrokenBarrierException e) {
+            e.printStackTrace();
         }
+
+        // IMPORTANT resetam bariera
+        Main.barrier.reset();
 
         // sorteaza results....
 
